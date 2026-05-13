@@ -1,0 +1,211 @@
+---
+title: "qatar_final_assignment"
+author: "Boglarka Ludmany"
+date: "2026-05-12"
+output: html_document
+---
+
+`echo = TRUE` - the code chunks are visible
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Libraries
+```{r}
+library(tidyverse)
+library(dplyr)
+library(tidytuesdayR)
+library(readr)
+library(stats)
+library(ggplot2)
+library(magrittr)
+```
+
+# 1. Importing data - directly from GitHub
+```{r}
+qatarcars <- readr::read_csv("https://raw.githubusercontent.com/rfordatascience/tidytuesday/main/data/2025/2025-12-09/qatarcars.csv")
+```
+
+# Questions to explore from the tidytuesday GitHub repository
+- What's the distribution of price? (there are some really expensive cars here!)
+- What's the relationship between (logged) price and performance?
+- Are there patterns across cars from different countries? Do some countries make more expensive cars? More electric cars?
+- What's the relationship between car dimensions and seating or trunk volume?
+
+# 2. EDA
+## 2.1. Exploring data structure, NA values 
+```{r}
+view(qatarcars)
+str(qatarcars) ## 105 rows altogether, data types are mainly double and character 
+
+colSums(is.na(qatarcars)) ## NA values only in the economy variable
+
+economy_na <- qatarcars[!complete.cases(qatarcars),] ## investigating the reason behind NA values in the economy variable 
+economy_na ## electric cars cannot be evaluated by their fuel economy
+```
+
+Value ranges with `summary`
+```{r}
+summary(qatarcars)
+```
+Unique values of `origin` and `make`
+```{r}
+origin_values <- tibble(unique(qatarcars$origin))
+origin_values
+
+brand_values <- tibble(unique(qatarcars$make))
+brand_values
+```
+
+
+## 2.2. Visualizations, Distributions
+### A. Univariate distributions
+#### Horsepower
+```{r}
+range(qatarcars$horsepower)
+horsepower_plot <- ggplot(qatarcars, aes(x = horsepower)) +
+  geom_histogram(binwidth = 20) +
+  scale_y_continuous(limits = c(0, 15),
+                   breaks = waiver())
+
+horsepower_plot
+```
+The distribution of horsepower is right-skewed: most cars are concentrated in the lower range, while a few high-performance outliers can also be observed. 
+
+#### Type of the car (`type`)
+```{r}
+unique(qatarcars$type)
+
+ggplot(qatarcars, aes(x = type)) +
+  geom_histogram(stat = "count", 
+                 color = "black", 
+                 fill = "grey") +
+  scale_y_continuous(limits = c(0, 80)) +
+  geom_text(
+    stat = "count",
+    aes(label = after_stat(count)), 
+    vjust = -1
+  )
+
+## extracting the distribution of the types of cars from the original dataset  
+type_sum <- qatarcars %>% 
+  count(type, name = "count")
+```
+With regards to the distribution of car types, majority of the cars are SUVs (52.381%), 26.667% of all cars are Sedans, 13.333% are Coupes, and 7.762% are Hatchbacks. 
+
+#### Type of the engine (`enginetype`)
+```{r}
+unique(qatarcars$enginetype)
+
+enginetype_counts <- qatarcars %>% 
+  count(enginetype, name = "count") %>%
+  mutate(percent = round(count / sum(count) * 100, 1)) 
+
+ggplot(enginetype_counts, aes(x = enginetype, y = count)) +
+  geom_bar(stat = "identity", color = "black", fill = "grey") +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.15))) +
+  geom_text(
+    aes(label = count),
+    vjust = -1
+  )
+```
+Majority of the cars are fueled by petrol (77.1%), hybrid (13.3%) and electric cars (9.5%) are present in smaller extent. 
+
+#### Origin (`origin`)
+```{r}
+unique(qatarcars$origin)
+
+origin_counts <- qatarcars %>% 
+  count(origin, name = "count") %>%
+  mutate(percent = round(count / sum(count) * 100, 1)) 
+
+## this plot visualizes the percentages of each country of origin
+ggplot(origin_counts, aes(x = origin, y = percent)) +
+  geom_bar(stat = "identity", color = "black", fill = "grey") +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.15))) +
+  geom_text(
+    aes(label = percent), 
+    vjust = -1
+  ) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+The majority of the cars originated from Japan (27.6%), followed by Germany (19%) and China (17.1%). A smaller proportion comes from the UK (10.5%), South Korea (9.5%), the USA (8.6%), Italy (4.8%), and Sweden (2.9%).
+
+#### Car brands
+```{r}
+qatarcars %>% summarise(n_brands = n_distinct(make))
+
+brands_counts <- qatarcars %>% 
+  count(make, name = "count") %>%
+  mutate(percent = round(count / sum(count) * 100, 1)) 
+
+ggplot(brands_counts, aes(x = make, y = count)) +
+  geom_bar(stat = "identity", color = "black", fill = "grey") +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.15))) +
+  geom_text(
+    aes(label = count), 
+    vjust = -1
+  ) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+The dataset includes 31 distinct car brands, with Toyota being the most represented (_n_ = 10), followed by Kia (_n_ = 6), BMW (_n_ = 5), Mercedes (_n_ = 5), and MG (_n_ = 5). The majority of the brands appear only 3-4 times, three brands (Jaguar, Lotus, and Subaru) have only one observation. This distribution can be interpreted as highly uneven, indicating that brand-level comparisons should be interpreted with caution. 
+
+### B. Multivariate Distributions
+To explore the relationship between engine performance and fuel consumption, a scatterplot of horsepower versus fuel consumption (L/100 km), by engine type is presented.
+```{r}
+economy_data <- qatarcars %>% 
+  filter(enginetype != "Electric") %>% ## fuel economy cannot be interpreted in the case of electric cars 
+  select(enginetype, horsepower, economy)
+
+ggplot(economy_data, aes(x = horsepower, y = economy, fill = enginetype)) +
+  geom_point(aes(colour = enginetype)) +
+  scale_color_brewer(palette = "Set1") +
+  labs(title = "Relationship between horsepower and fuel economy, \nby engine type")
+```
+This plot suggests a positive linear trend between horsepower and fuel consumption (indicating that more powerful cars tend to be less fuel-efficient). The relationship exhibits an increasing variability at higher horsepower levels.
+
+To further explore the differences in fuel consumption between engine types, a boxplot was created. 
+```{r}
+no_electric <- qatarcars %>% 
+  filter(enginetype != "Electric")
+
+ggplot(no_electric, aes(x = enginetype, y = economy, fill = enginetype)) +
+  geom_boxplot() +
+  theme_minimal()
+```
+Petrol vehicles greater variabiliy in fuel consumption, while there is only a slight difference in the medians of the consumption of hybrid and petrol. 
+
+In order to further explore the different characteristics of the engine types, a scatterplot of horsepower and performance, by engine type was created. 
+```{r}
+ggplot(qatarcars, aes(x = horsepower, y = performance, fill = enginetype)) +
+  geom_point(aes(colour = enginetype))
+```
+This plot suggests a negative relationship between horsepower and performance, indicating that vehicles with higher horsepower tend to have lower performance values. The relationship is nonlinear: performance decreases rapidly, as horsepower increases. This pattern is explicitly strong in the cases of cars fueled by petrol. 
+
+horsepower and: 
+  - origin / make
+  - origin -» boxplot
+
+Horsepower and mass  
+```{r}
+ggplot(qatarcars, aes(x = horsepower, y = mass, fill = enginetype)) +
+  geom_point(aes(color = enginetype))
+
+## todo: explanation and interpretation
+```
+Horsepower and price, by engine type 
+```{r}
+ggplot(qatarcars, aes(x = price, y = horsepower)) +
+  geom_point()
+
+## maybe here: not a geom point? - not the most informative option to visualize 
+```
+
+
+# 4. Hypotheses 
+
+# 5. Statistical Modelling
+
+# 6. Diagnostics
+
+# 7. Conclusion
