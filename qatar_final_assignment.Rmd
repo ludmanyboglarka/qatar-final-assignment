@@ -69,6 +69,8 @@ horsepower_plot <- ggplot(qatarcars, aes(x = horsepower)) +
                    breaks = waiver())
 
 horsepower_plot
+
+ggsave(filename = "horsepower_plot.png", plot = get_last_plot())
 ```
 The distribution of horsepower is right-skewed: most cars are concentrated in the lower range, while a few high-performance outliers can also be observed. 
 
@@ -159,8 +161,9 @@ economy_data <- qatarcars %>%
 
 ggplot(economy_data, aes(x = horsepower, y = economy, fill = enginetype)) +
   geom_point(aes(colour = enginetype)) +
-  scale_color_brewer(palette = "Set1") +
-  labs(title = "Relationship between horsepower and fuel economy, \nby engine type")
+  scale_color_brewer(palette = "Set1")
+
+ggsave(filename = "economy_horsepower_plot.png", plot = get_last_plot())
 ```
 This plot suggests a positive linear trend between horsepower and fuel consumption (indicating that more powerful cars tend to be less fuel-efficient). The relationship exhibits an increasing variability at higher horsepower levels.
 
@@ -172,6 +175,8 @@ no_electric <- qatarcars %>%
 ggplot(no_electric, aes(x = enginetype, y = economy, fill = enginetype)) +
   geom_boxplot() +
   theme_minimal()
+
+ggsave(filename = "enginetype_economy_plot.png", plot = get_last_plot())
 ```
 Petrol vehicles greater variabiliy in fuel consumption, while there is only a slight difference in the medians of the consumption of hybrid and petrol. 
 
@@ -179,33 +184,53 @@ In order to further explore the different characteristics of the engine types, a
 ```{r}
 ggplot(qatarcars, aes(x = horsepower, y = performance, fill = enginetype)) +
   geom_point(aes(colour = enginetype))
+
+ggsave(filename = "horsepower_performance.png", plot = get_last_plot())
 ```
 This plot suggests a negative relationship between horsepower and performance, indicating that vehicles with higher horsepower tend to have lower performance values. The relationship is nonlinear: performance decreases rapidly, as horsepower increases. This pattern is explicitly strong in the cases of cars fueled by petrol. 
-
-horsepower and: 
-  - origin / make
-  - origin -» boxplot
 
 Horsepower and mass  
 ```{r}
 ggplot(qatarcars, aes(x = horsepower, y = mass, fill = enginetype)) +
   geom_point(aes(color = enginetype))
 
-## todo: explanation and interpretation
+ggsave(filename = "horsepower_mass_plot.png", plot = get_last_plot())
 ```
-Horsepower and price, by engine type 
+This scatterplot indicates a positive relationship between horsepower and vehicle mass, suggesting that more powerful cars tend to be heavier. 
+
+To examine how vehicle horsepower differs by country of origin, a boxplot of horsepower across origins is presented. 
 ```{r}
-ggplot(qatarcars, aes(x = price, y = horsepower)) +
-  geom_point()
+origin_horsepower <- qatarcars %>% 
+  select(horsepower, origin)
 
-## maybe here: not a geom point? - not the most informative option to visualize 
+ggplot(origin_horsepower, aes(x = origin, y = horsepower, fill = origin)) +
+  geom_boxplot() +
+  theme_minimal()
+
+ggsave(filename = "origin_horsepower_plot.png", plot = get_last_plot())
 ```
-
+Vehicles from the UK and Italy tend to have higher horsepower values; Italian cars show the greatest variability in horsepower, suggesting the presence of many high-performance vehicles. 
 
 # 4. Hypotheses 
+Based on the exploratory data analysis and visualizations, the following hypotheses were formed: 
+H1: Higher horsepower can be associated with higher fuel consumption, controlling for engine type. 
+(If two cars have the same engine type, does higher horsepower increase fuel consumption?)
+- main variable: horsepower, control variable: engine type 
+
+H2: Engine type affects fuel consumption, controlling for horsepower. (If two cars have the same horsepower, do different engine types consume fuel differently?)
+- main variable: engine type, control variable: horsepower
+
+H3: Vehicle mass affects fuel consumption after controlling for horsepower. 
 
 # 5. Statistical Modelling
+- build models for each hypothesis conceptually
+- check assumptions with stat tests
+- conclusion for assumptions
+- build models statistically
 
 # 6. Diagnostics
+- run models and extract results 
+- interpret results and model diagnostics 
 
 # 7. Conclusion
+- 
