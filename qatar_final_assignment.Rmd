@@ -1,7 +1,7 @@
 ---
-title: "qatar_final_assignment"
+title: "Cars in Qatar"
 author: "Boglarka Ludmany"
-date: "2026-05-12"
+date: "2026-05-18"
 output: html_document
 ---
 
@@ -19,6 +19,10 @@ library(readr)
 library(stats)
 library(ggplot2)
 library(magrittr)
+library(performance)
+library(see)
+library(patchwork)
+library(lmtest)
 ```
 
 # 1. Importing data - directly from GitHub
@@ -69,8 +73,6 @@ horsepower_plot <- ggplot(qatarcars, aes(x = horsepower)) +
                    breaks = waiver())
 
 horsepower_plot
-
-ggsave(filename = "horsepower_plot.png", plot = get_last_plot())
 ```
 The distribution of horsepower is right-skewed: most cars are concentrated in the lower range, while a few high-performance outliers can also be observed. 
 
@@ -159,24 +161,24 @@ economy_data <- qatarcars %>%
   filter(enginetype != "Electric") %>% ## fuel economy cannot be interpreted in the case of electric cars 
   select(enginetype, horsepower, economy)
 
-ggplot(economy_data, aes(x = horsepower, y = economy, fill = enginetype)) +
+economy_horsepower_plot <- ggplot(economy_data, aes(x = horsepower, y = economy, fill = enginetype)) +
   geom_point(aes(colour = enginetype)) +
   scale_color_brewer(palette = "Set1")
 
-ggsave(filename = "economy_horsepower_plot.png", plot = get_last_plot())
+economy_horsepower_plot
 ```
-This plot suggests a positive linear trend between horsepower and fuel consumption (indicating that more powerful cars tend to be less fuel-efficient). The relationship exhibits an increasing variability at higher horsepower levels.
+This plot suggests a not clearly linear, but positive trend between horsepower and fuel consumption (indicating that more powerful cars tend to be less fuel-efficient). The relationship suggests an increasing variability at higher horsepower levels.
 
 To further explore the differences in fuel consumption between engine types, a boxplot was created. 
 ```{r}
 no_electric <- qatarcars %>% 
   filter(enginetype != "Electric")
 
-ggplot(no_electric, aes(x = enginetype, y = economy, fill = enginetype)) +
+enginetype_economy_plot <- ggplot(no_electric, aes(x = enginetype, y = economy, fill = enginetype)) +
   geom_boxplot() +
   theme_minimal()
 
-ggsave(filename = "enginetype_economy_plot.png", plot = get_last_plot())
+enginetype_economy_plot 
 ```
 Petrol vehicles greater variabiliy in fuel consumption, while there is only a slight difference in the medians of the consumption of hybrid and petrol. 
 
@@ -184,8 +186,6 @@ In order to further explore the different characteristics of the engine types, a
 ```{r}
 ggplot(qatarcars, aes(x = horsepower, y = performance, fill = enginetype)) +
   geom_point(aes(colour = enginetype))
-
-ggsave(filename = "horsepower_performance.png", plot = get_last_plot())
 ```
 This plot suggests a negative relationship between horsepower and performance, indicating that vehicles with higher horsepower tend to have lower performance values. The relationship is nonlinear: performance decreases rapidly, as horsepower increases. This pattern is explicitly strong in the cases of cars fueled by petrol. 
 
@@ -193,8 +193,6 @@ Horsepower and mass
 ```{r}
 ggplot(qatarcars, aes(x = horsepower, y = mass, fill = enginetype)) +
   geom_point(aes(color = enginetype))
-
-ggsave(filename = "horsepower_mass_plot.png", plot = get_last_plot())
 ```
 This scatterplot indicates a positive relationship between horsepower and vehicle mass, suggesting that more powerful cars tend to be heavier. 
 
@@ -206,31 +204,172 @@ origin_horsepower <- qatarcars %>%
 ggplot(origin_horsepower, aes(x = origin, y = horsepower, fill = origin)) +
   geom_boxplot() +
   theme_minimal()
-
-ggsave(filename = "origin_horsepower_plot.png", plot = get_last_plot())
 ```
 Vehicles from the UK and Italy tend to have higher horsepower values; Italian cars show the greatest variability in horsepower, suggesting the presence of many high-performance vehicles. 
 
-# 4. Hypotheses 
+# 3. Hypotheses 
 Based on the exploratory data analysis and visualizations, the following hypotheses were formed: 
 H1: Higher horsepower can be associated with higher fuel consumption, controlling for engine type. 
-(If two cars have the same engine type, does higher horsepower increase fuel consumption?)
-- main variable: horsepower, control variable: engine type 
 
-H2: Engine type affects fuel consumption, controlling for horsepower. (If two cars have the same horsepower, do different engine types consume fuel differently?)
-- main variable: engine type, control variable: horsepower
+More powerful cars may consume more fuel, however, it needs to be taken into account that fuel consumption may also vary across different engine types, therefore, engine type needs to be added to the hypothesis as a control variable. Therefore, our question regarding this hypothesis becomes: If two cars have the same engine type, does higher horsepower increase fuel consumption?
 
-H3: Vehicle mass affects fuel consumption after controlling for horsepower. 
+# 4. Statistical Modelling
+H1: Higher horsepower can be associated with higher fuel consumption, controlling for engine type.
 
-# 5. Statistical Modelling
-- build models for each hypothesis conceptually
-- check assumptions with stat tests
-- conclusion for assumptions
-- build models statistically
+To test this hypothesis, a linear regression model was used, with `ecnonomy` as the outcome variable, and `horsepower` and `enginetype` as predictors. Horsepower is the primary explanatory variable, engine type is added as a control variable to account for differences between vehicles. Electric cars were not included in the analysis, since electric cars do not consume fuel (therefore, in the case of cars with said engine type, the variable `economy` had NA values). 
+The assumptions of the linear regression (linearity, independence of observations, homoskedasticity, normality of residuals, and no multicollinearity) were assessed using standard diagnostic measures.
 
-# 6. Diagnostics
-- run models and extract results 
-- interpret results and model diagnostics 
+## 4.1. Assumptions before fitting the model: 
+The following assumptions were assessed before fitting the model: 
+- Linearity 
+- No multicollinearity
+- Outliers
+- Sufficient sample size 
 
-# 7. Conclusion
-- 
+Assumptions that were checked after fitting the model (on model residuals): 
+- Normality of residuals
+- Homoscedasticity
+- Independence of residuals
+- Linearity (in residuals)
+- No influential outliers
+- Multicollinearity (VIF)
+
+#### Linearity
+According to the linearity assumption, the relationship between the dependent variable and independent variable should be linear. Stated differently, changes in the independent variable should result in constant changes in the dependent variable. The following scatterplot (as created before) is sufficient. 
+```{r}
+ggplot(economy_data, aes(x = horsepower, y = economy, fill = enginetype)) +
+  geom_point(aes(colour = enginetype)) +
+  scale_color_brewer(palette = "Set1") +
+  geom_smooth(method = "loess", se = TRUE, aes(color = enginetype))
+```
+On the scatterplot, a loess smoothing curve was added to assess the linearity based on the control variable.
+The data is heavily clustered around the 0-400 horsepower range, with very few observations at higher values; therefore, this relationship is harder to assess reliabily within the full range. There are potential outliers. 
+For petrol vehicles, the relationship appeared to be broadly positive, although the curve is influenced by outliers at ~1600 hp. For hybrid vehicles, the curve shows a non-linear pattern (likely due to the small number of observations). 
+Overall, the linearity assumption was considered violated, therefore, as a potential solution to this problem, `horsepower` was log-transformed. 
+```{r}
+ggplot(economy_data, aes(x = log(horsepower), y = economy, fill = enginetype)) +
+  geom_point(aes(colour = enginetype)) +
+  scale_color_brewer(palette = "Set1") +
+  geom_smooth(method = "loess", se = TRUE, aes(color = enginetype))
+```
+As can be seen on this plot, the log-transformation of horsepower did not improve the linearity of the relationship. Since the number of hybrid observations are rather small, and a high-leverage outlier is present, the linearity assumption was assessed primarily trough post-fit residual diagnostics. 
+
+##### Multicollinearity
+To assess potential multicollinearity between the predictors (continuous: `horsepower` and categorical: `enginetype`), the distribution of horsepower was examined for hybrid and petrol vehicles, using a boxplot. (As stated before, electric vehicles were excluded from the analysis, as fuel economy cannot be analyised in the case of fully electric cars.)
+The distribution of horsepower was similar, with a substantial overlap, suggesting that multicollinearity between the predictors is unlikely to be concerning.  
+Multicollinearity was further assessed using Variance Inflation Factors following model fitting.
+```{r}
+ggplot(no_electric, aes(x = enginetype, y = horsepower)) +
+  geom_boxplot()
+```
+Assumptions that were checked after fitting the model (on model residuals): 
+- Normality of residuals
+- Homoscedasticity
+- Independence of residuals
+- Linearity (in residuals)
+- No influential outliers
+- Multicollinearity (VIF)
+
+The final sample size is 95 vehicles (not including the electric cars). 
+```{r}
+nrow(no_electric)
+```
+
+# 4.2. Model fitting 
+To test the hypothesis (Higher horsepower is associated with greater fuel consumption, after controlling for engine type.), a linear regression model was fitted on the data, with economy as the outcome variable, and horsepower and engine type as predictors. As stated before, electric vehicles were excluded from the analysis `(n = 10)`, as fuel economy cannot be interpreted in the case of electric cars. 
+```{r}
+model <- lm(economy ~ horsepower + enginetype, data = no_electric)
+summary(model)
+```
+Before interpreting the regression results, the following assumptions of the model residuals were checked: 
+- Normality of residuals,
+- Homoscedasticity,
+- Independence of residuals,
+- Linearity (in residuals),
+- Multicollinearity (VIF).
+The assessment of the assumptions was executed using the `performance` package (Lüdecke et al., 2021). 
+
+#### Normality of residuals
+Normality of residuals was first assessed using the Shapiro-Wilk test (`performance::check_normality()`). Results indicated that the distribution of the residuals significantly deviated from the normal distribution (_W_ = 0.88235, _p_ < .001).
+```{r}
+performance::check_normality(model)
+
+shapiro.test(residuals(model))
+```
+A density plot was used to visually investigate the distribution of the residuals. The density plot indicated a right-skewed distribution, as the residuals did not closely follow the theoretical normal curve. 
+```{r}
+performance::check_model(model, check = "normality")
+```
+
+Visual inspection of the Q-Q plot revealed that the residuals deviated from the reference line (particularly, at the tails), suggesting a violation of normality.  
+```{r}
+performance::check_model(model, check = "qq")
+```
+
+In order to assess the violation of the normality assumption, a log transformation of the outcome variable (`economy`) was explored. However, the normality assumption remained violated following the transformation. 
+Therefore, the untransformed model was retained, and the violation is acknowledged as a limitation.
+According to the central limit theorem, the sampling distribution of regression coefficients approximates normality at this sample size (_n_ = 95); this reduces the impact of the violation of the normality assumption.
+```{r}
+model2 <- lm(log(economy) ~ horsepower + enginetype, data = no_electric)
+shapiro.test(residuals(model2))
+performance::check_model(model2, check = "qq")
+```
+
+#### Homoscedasticity
+The assumption of homoscedasticity (the homogeneity of the variances) the `performance::check_heteroskedasticity()` function, using significance testing regarding constant variance. This significance test 
+Visual inspection was executed using the Residuals vs Fitted and Scale-Location plots (`plot(model)`, 1st and 3rd plot); the residuals were heavily concentrated at lower fitted values (which reflects the skewed distribution of the data). However, no systematic widening of the residual spread was observed. 
+The re
+The `performance::check_heteroskedasticity()` test (Breusch-Pagan test) confirmed homoscedasticity (_p_ = .313). 
+```{r}
+performance::check_heteroskedasticity(model, check = "homogenity")
+
+plot(model)
+```
+
+#### Independence of residuals 
+Independence of residuals was assessed using the Durbin-Watson-test (via `performance::check_autocorrelation()`). The test indicated that residuals were independent, and not autocorrelated (_p_ = .146).
+```{r}
+performance::check_autocorrelation(model)
+```
+#### Linearity of residuals
+Linearity of residuals was assessed visually using the Residuals vs Fitted plot, and formally using the Rainbow test. The visual inspection indicated a slight curvature in the reference line; the deviance from was minor. 
+The Rainbow test indicated no significant violation of linearity (_Rain_ = 1.1174, _df1_ = 48, _df2_ = 44, _p_ = .356). 
+```{r}
+performance::check_model(model, check = "linearity")
+
+lmtest::raintest(model)
+```
+#### Multicollinearity (Variance Inflation Factor - VIF)
+Multicollinearity was assessed visually using a VIF plot, and formally using the `performance::check_collinearity()` function. Both predictors yielded a VIF value of 1.00, indicating that no multicollinearity was present between horsepower and engine type. 
+```{r}
+performance::check_model(model, check = "vif")
+
+performance::check_collinearity(model)
+```
+#### Outlier diagnostics
+Potential outliers were assessed using Cook's distance measures (`performance::check_model()`). The assessment revealed that all observations fell within the acceptable boundaries, no influential outliers were detected (threshold: Cook's D > 0.70). 
+```{r}
+performance::check_model(model, check = "outliers")
+
+performance::check_outliers(model)
+```
+
+#### Conclusion regarding assumptions
+In summary, the majority of assumptions were met. Homoscedasticity was confirmed by the Breusch-Pagan test (_p_ = .313), the independence of residuals was not violated either (_p_ = .146). The linearity of residuals was supported by the Rainbow-test (Rain = 1.12, df1 = 48, df2 = 44, p = .356), and no multicollinearity was detected (VIF = 1.00). No outliers were detected, all observations fell within the acceptable threshold of Cook's distance. 
+The assumption of normality was violated (_W_ = 0.88235, _p_ < .001); a log-transformation of the outcome variable was explored as a remedy, but did not resolve the violation. Given the sample size (_n_ = 95), the violation is acknowledged as a limitation.  
+
+# 5. Diagnostics
+```{r}
+summary(model)
+```
+The model explained 53.3% of the variance in the data (_R^2_ = .5429, _adjusted R^2_ = .533, _F(2,92)_ = 54.63, _p_ < .001).
+`horsepower` was a significant positive predictor of `economy` (_b_ = 0.011, _SE_ = 0.001, _t(92)_ = 10.363, _p_ < .001), suggesting that higher horsepower was associated with greater fuel consumption, controlling for engine type. 
+No significant effect of engine type was found (_b_ = 1.388, _SE_ = 0.71, _t(92)_ = 1.956, _p_ = .054).
+
+# 6. Conclusions 
+The aim of the present analysis was to explore whether higher horsepower is associated with greater consumption of fuel (`economy`), controlling for engine type. The sample size consisted of 95 non-electric vehicles. 
+A linear regression model was fitted with `economy` as the outcome variable, and `horsepower` and `enginetype` as predictors. 
+The model results and diagnostics suggested that the predictors together account for a substantial portion of the variability in fuel consumption (_R^2_ = .543, _adjusted R^2_ = .533, _F(2, 92)_ = 54.63, _p_ < .001).
+The hypothesis was supported: horsepower was a significant positive predictor of fuel economy (_b_ = 0.011, _SE_ = 0.001, _t(92)_ = 10.363, _p_ < .001), however, no significant effect of engine type was found (_b_ = 1.388, _SE_ = 0.71, _t(92)_ = 1.956, _p_ = .054). 
+Certain limitations should be noted. The assumption of normality was violated (_W_ = 0.88235, _p_ < .001), and the log-transformation of the outcome variable did not seem to resolve this violation. The data were heavily concentrated at lower horsepower values, with very few vehicles at higher ranges, therefore, the reliability of the model across the full range is rather questionable. 
+The small number of hybrid vehicles further limits the generalisability of the analysis. 
